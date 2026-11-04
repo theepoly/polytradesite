@@ -1,0 +1,237 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PolyTrading DBot - Final</title><style>
+body{margin:0;background:#070b14;color:#fff;font-family:system-ui;padding-bottom:80px}
+.top{background:#0d1224;padding:10px;display:flex;border-bottom:1px solid #1c2540;position:sticky;top:0;z-index:10;align-items:center}
+.bal{margin-left:auto;background:#111a33;padding:6px 10px;border-radius:20px;color:#22c55e;font-size:11px;border:1px solid #243358;font-weight:900;display:flex;align-items:center;gap:4px}
+.switch{display:flex;gap:4px;margin-left:8px}.switch div{padding:5px 10px;border-radius:12px;font-size:10px;font-weight:900;border:1px solid #243358}.switch div.active{background:#fbbf24;color:#000}
+#pageLogin{display:block;padding:12px}#p1,#p2,#p3,#pBot{display:none;padding:10px}
+#wrap{width:100%;height:340px;background:#0a1020;border:1px solid #1c2540;border-radius:12px;margin-top:8px}
+#chart{width:100%;height:100%;display:block;background:#0a1020;touch-action:none}.price{font-size:28px;font-weight:900;color:#22c55e}
+.label{font-size:10px;color:#6b7aa0;font-weight:800;margin-top:10px;margin-bottom:4px}
+.input{width:100%;padding:12px;background:#0a1020;border:2px solid #243358;color:#fff;border-radius:10px;box-sizing:border-box;font-weight:700}
+.btn{width:100%;padding:13px;border:0;border-radius:10px;font-weight:900;margin-top:8px}
+.buy{background:#22c55e;color:#000}.sell{background:#ef4444;color:#fff}.dep{background:#fbbf24;color:#000}.with{background:#111a33;color:#fff;border:1px solid #243358}
+.bottomNav{position:fixed;bottom:0;left:0;right:0;background:#0d1224;border-top:1px solid #1c2540;display:flex;z-index:100}.bottomNav div{flex:1;text-align:center;padding:12px 2px;font-size:10px;color:#6b7aa0;font-weight:800}
+.loginBox{max-width:360px;margin:30px auto;padding:20px;background:#0d1224;border:1px solid #1c2540;border-radius:16px}
+#processingBar{position:fixed;bottom:45px;left:0;right:0;height:68px;display:none;align-items:center;justify-content:space-between;padding:0 12px;z-index:99;font-weight:900;border-top:3px solid #fff}
+#processingBar.green{background:#22c55e;color:#000}#processingBar.red{background:#ef4444;color:#fff}
+#resultPopup{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;z-index:200}
+.popupBox{width:85%;max-width:320px;background:#0d1224;border:2px solid #1c2540;border-radius:16px;padding:20px;text-align:center}
+.popupBox.profit{border-color:#22c55e}.popupBox.loss{border-color:#ef4444}
+.rateTicker{display:flex;gap:8px;overflow-x:auto;padding:8px 0;font-size:11px}.rateItem{background:#111a33;border:1px solid #1c2540;border-radius:8px;padding:6px 10px;white-space:nowrap;min-width:100px}
+.botCard{background:#0d1224;border:1px solid #1c2540;padding:12px;border-radius:12px;margin-top:10px}
+.block{border:1px dashed #243358;padding:8px;border-radius:8px;margin:4px 0;background:#0a1020;font-size:11px}
+</style></head><body>
+<div class="top"><b>PolyTrading BINARY</b><div class="switch"><div id="demoBtn" class="active" onclick="setMode('demo')">DEMO</div><div id="realBtn" onclick="setMode('real')">REAL</div></div><div class="bal" id="balTop"><img id="usFlag" src="https://flagcdn.com/w40/us.png" style="display:none;width:18px;height:18px;border-radius:50%;object-fit:cover;border:1px solid #243358"><span id="balText">$10,000 DEMO</span><span id="depTopBtn" style="display:none;background:#16a34a;color:white;padding:3px 8px;border-radius:10px;margin-left:4px;font-size:10px" onclick="showPage(2)">+ Deposit</span></div></div><!-- AUTO DERIV CONNECT - ADD THIS -->
+<div style="padding:8px;background:#0d1224;text-align:center;border-bottom:1px solid #1c2540">
+<button id="derivConnectBtn" onclick="loginDerivAuto()" style="background:#00d395;color:#000;padding:10px 20px;border:none;border-radius:20px;font-weight:800;font-size:13px">
+🔗 CONNECT TO DERIV
+</button>
+<div id="derivStatus" style="font-size:11px;color:#fbbf24;margin-top:4px">Not connected - Click to login</div>
+</div>
+
+<script>
+const APP_ID = 68853;
+let dToken = localStorage.getItem('deriv_token') || new URLSearchParams(location.search).get('token1') || new URLSearchParams(location.search).get('token');
+if(dToken){ localStorage.setItem('deriv_token', dToken); history.replaceState({}, '', location.pathname); }
+function loginDerivAuto(){
+  const t = localStorage.getItem('deriv_token');
+  if(t){ connectDerivReal(t); return; }
+  window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}`;
+}
+function connectDerivReal(token){
+  document.getElementById('derivStatus').innerText = 'Connecting...';
+  const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
+  ws.onopen = ()=> ws.send(JSON.stringify({authorize: token}));
+  ws.onmessage = (e)=>{
+    const d = JSON.parse(e.data);
+    if(d.authorize){
+      document.getElementById('derivStatus').innerText = 'Connected: ' + d.authorize.loginid + ' ✓';
+      document.getElementById('derivStatus').style.color = '#00d395';
+      document.getElementById('derivConnectBtn').innerText = '✓ CONNECTED: ' + d.authorize.loginid;
+      ws.send(JSON.stringify({balance:1, subscribe:1}));
+    }
+    if(d.balance){
+      document.getElementById('balText').innerText = '$' + d.balance.balance.toFixed(2) + ' REAL';
+      document.getElementById('balText').style.color = '#00d395';
+      document.getElementById('balTop').style.display = 'block';
+      if(document.getElementById('balTop')) document.getElementById('balTop').innerHTML = '$' + d.balance.balance.toFixed(2) + ' REAL';
+    }
+  };
+}
+if(dToken){ connectDerivReal(dToken); }
+</script>
+<!-- END AUTO CONNECT -->
+<div id="pageLogin"><div class="loginBox"><h3>PolyTrading LOGIN</h3><div style="font-size:10px;color:#6b7aa0;margin-bottom:6px">Enter Phone (Linked to Admin)</div><input id="loginPhone" class="input" placeholder="07xxxxxxxx"><input class="input" value="123456" type="password" style="margin-top:6px"><button class="btn" style="background:#fbbf24;color:#000" onclick="forceLogin()">LOGIN</button></div></div>
+<div id="p1"><div class="rateTicker" id="rateTicker"></div><div style="display:flex;gap:8px"><select id="assetSel" class="input" style="flex:1" onchange="changeAsset()"><option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option><option>BTC/USD</option><option>ETH/USD</option></select><div style="flex:1;background:#0a1020;border:1px solid #1c2540;border-radius:10px;padding:6px;text-align:center"><div style="font-size:8px;color:#6b7aa0">EXCHANGE RATE</div><div id="exRate" style="font-size:13px;font-weight:900;color:#22c55e">1.08460</div><div style="font-size:8px;color:#fbbf24">BINARY 90% - <span id="modeLabel">DEMO</span></div></div></div><div style="display:flex;justify-content:space-between;margin-top:8px"><b id="assetTitle">EUR/USD BINARY</b><span id="nextTxt" style="color:#fbbf24;font-size:11px">Next: 30.0s</span></div><div style="display:flex;gap:10px"><div class="price" id="priceTxt">1.08460</div><div style="font-size:10px"><div>Strike: <span id="strikeTxt">1.08460</span></div><div>Payout: <span style="color:#22c55e">90%</span></div><div style="font-size:9px;color:#fbbf24">MA10 yellow MA20 blue - Swipe</div></div></div><div id="wrap"><canvas id="chart" width="360" height="340"></canvas></div><div style="display:flex;gap:6px;margin-top:6px"><button class="btn with" style="flex:1;padding:8px;font-size:10px" onclick="scrollOffset=Math.min(candles.length-visibleCount,scrollOffset+5);draw();">OLDER</button><button class="btn with" style="flex:1;padding:8px;font-size:10px;background:#fbbf24;color:#000" onclick="scrollOffset=0;draw();">LIVE NOW</button><button class="btn with" style="flex:1;padding:8px;font-size:10px" onclick="scrollOffset=Math.max(0,scrollOffset-5);draw();">NEWER</button></div><div style="display:flex;gap:10px;margin-top:6px"><div style="flex:1"><div class="label">STAKE ($)</div><input id="stake" class="input" value="10" type="number"></div><div style="flex:1"><div class="label">DURATION</div><select id="dur" class="input"><option value="30">30s Binary</option><option value="60">60s Binary</option></select></div></div><button class="btn buy" onclick="doTrade('BUY')">BUY</button><button class="btn sell" onclick="doTrade('SELL')">SELL</button><div class="botCard"><b style="color:#fbbf24">🤖 DBOT QUICK</b><div style="display:flex;gap:6px;margin-top:8px"><select id="botStrat" class="input" style="flex:1"><option value="fixed">Fixed</option><option value="martingale">Martingale x2</option><option value="dalembert">D'Alembert</option></select><select id="botDir" class="input" style="flex:1"><option value="BUY">BUY Only</option><option value="SELL">SELL Only</option><option value="ALTERNATE">Alternate</option></select></div><div style="display:flex;gap:6px"><input id="bulkCount" class="input" style="flex:1;margin-top:6px" value="5" type="number"><button class="btn dep" style="flex:1" onclick="startBot()">▶ START BOT</button><button class="btn with" style="flex:1" onclick="stopBot()">■ STOP</button></div><div id="botLog" style="font-size:10px;color:#6b7aa0;margin-top:6px;max-height:80px;overflow-y:auto">Bot idle - Exactly like Deriv DBot</div><button class="btn with" style="background:#fbbf24;color:#000;margin-top:6px" onclick="bulkTrade()">⚡ BULK TRADE NOW</button></div></div>
+<div id="p2"><h3>Wallet - <span id="walletMode">DEMO</span> - <span id="accId" style="color:#22c55e;font-size:11px"></span></h3><div style="background:#0d1224;border:1px solid #1c2540;padding:12px;border-radius:12px"><div id="bal2" style="font-size:32px;font-weight:900">$10,000.00</div><div id="walletDesc" style="font-size:10px;color:#6b7aa0">DEMO</div><div id="phoneShow" style="font-size:10px;color:#fbbf24;margin-top:4px"></div></div><div id="realBox" style="display:none;margin-top:12px"><div style="background:#0d1224;border:1px solid #1c2540;padding:12px;border-radius:12px"><div style="font-size:11px;font-weight:800">DEPOSIT</div><input id="mpesaPhone" class="input" placeholder="07xxxxxxxx" type="tel" style="margin-top:6px"><input id="depAmount" class="input" placeholder="Amount KES min 100" type="number" style="margin-top:6px"><button class="btn dep" onclick="depositReal()">DEPOSIT M-PESA</button></div><div style="background:#0d1224;border:1px solid #1c2540;padding:12px;border-radius:12px;margin-top:10px"><div style="font-size:11px;font-weight:800">WITHDRAW REAL</div><input id="withAmount" class="input" placeholder="Amount USD min 10" type="number" style="margin-top:6px"><button class="btn with" onclick="withdraw()">WITHDRAW</button></div><button onclick="clearFix()" style="background:#333;color:#fff;padding:8px;border:0;width:100%;border-radius:6px;font-size:10px;margin-top:8px">FIX $NaN</button></div><div id="demoBox" style="margin-top:12px"><button class="btn with" onclick="resetDemo()">RESET DEMO $10,000</button><button class="btn with" style="margin-top:6px" onclick="window.open('admin.html','_blank')">OPEN ADMIN</button></div></div>
+<div id="p3"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">History - <span id="histMode">DEMO</span></h3><span style="font-size:10px;background:#111a33;border:1px solid #1c2540;padding:4px 8px;border-radius:8px" onclick="document.getElementById('historyList').innerHTML='';profitDemo=0;profitReal=0;tradeCount=0;wins=0;updateHistoryStats();updateBalances();">CLEAR</span></div><div style="display:flex;gap:8px;margin-top:12px"><div style="flex:1;background:#0d1224;border:1px solid #1c2540;border-radius:12px;padding:10px;text-align:center"><div style="font-size:9px;color:#6b7aa0">TRADES</div><div id="statTrades" style="font-size:18px;font-weight:900">0</div></div><div style="flex:1;background:#0d1224;border:1px solid #1c2540;border-radius:12px;padding:10px;text-align:center"><div style="font-size:9px;color:#6b7aa0">WIN RATE</div><div id="statWinRate" style="font-size:18px;font-weight:900;color:#22c55e">0%</div></div><div style="flex:1;background:#0d1224;border:1px solid #1c2540;border-radius:12px;padding:10px;text-align:center"><div style="font-size:9px;color:#6b7aa0">PROFIT</div><div id="statProfit" style="font-size:18px;font-weight:900">+0.00</div></div></div><div style="display:flex;gap:6px;margin-top:10px"><button id="fAll" class="btn with" style="flex:1;padding:8px;font-size:10px;background:#fbbf24;color:#000" onclick="filterHistory('all')">ALL</button><button id="fProfit" class="btn with" style="flex:1;padding:8px;font-size:10px" onclick="filterHistory('profit')">PROFIT</button><button id="fLoss" class="btn with" style="flex:1;padding:8px;font-size:10px" onclick="filterHistory('loss')">LOSS</button></div><div id="profit" style="font-size:11px;color:#6b7aa0;margin-top:8px;text-align:center">No trades yet</div><div id="historyList" style="margin-top:10px;display:flex;flex-direction:column;gap:8px"></div></div>
+<div id="pBot"><h3 style="margin:0">🤖 DBOT LAB - Bot Builder</h3><div class="botCard"><b>1. BOT BUILDER - Visual Blocks</b><div class="block">🟦 When Run -> Set Stake $[<span id="bStake">10</span>] + Asset [<span id="bAsset">EUR/USD</span>]</div><div class="block">🟩 Trade Logic -> <select id="logicSel" class="input" style="padding:4px;margin-top:4px"><option value="manual">Manual BUY/SELL</option><option value="rsi">RSI > 70 SELL / < 30 BUY</option><option value="ma">MA10 cross MA20</option><option value="price">Price up = BUY</option></select></div><div class="block">🟨 Money Management -> <select id="mmSel" class="input" style="padding:4px;margin-top:4px"><option value="fixed">Fixed Stake</option><option value="martingale">Martingale (x2 on LOSS)</option><option value="reverse">Reverse Martingale (x2 on WIN)</option><option value="dalembert">D'Alembert (+1 on LOSS)</option></select></div><div class="block">🟥 Risk Control -> Stop Loss $<input id="stopLoss" value="50" style="width:50px;background:#000;color:#fff;border:1px solid #333;border-radius:4px"> Take Profit $<input id="takeProfit" value="100" style="width:50px;background:#000;color:#fff;border:1px solid #333;border-radius:4px"></div><button class="btn dep" onclick="startBot()">▶ START BOT BUILDER</button><button class="btn with" onclick="stopBot()">■ STOP BOT</button></div><div class="botCard"><b>2. ANALYZE - Bot Performance</b><div style="display:flex;gap:8px;margin-top:8px"><div style="flex:1;background:#111a33;padding:8px;border-radius:8px;text-align:center"><div style="font-size:8px;color:#6b7aa0">BOT PROFIT</div><div id="botProfit" style="font-size:16px;font-weight:900;color:#22c55e">$0.00</div></div><div style="flex:1;background:#111a33;padding:8px;border-radius:8px;text-align:center"><div style="font-size:8px;color:#6b7aa0">BOT TRADES</div><div id="botTrades" style="font-size:16px;font-weight:900">0</div></div><div style="flex:1;background:#111a33;padding:8px;border-radius:8px;text-align:center"><div style="font-size:8px;color:#6b7aa0">WIN RATE</div><div id="botWin" style="font-size:16px;font-weight:900">0%</div><div id="botLoss" style="font-size:8px;color:#ef4444">LOSS 0</div></div></div><div style="margin-top:8px;font-size:10px"><div>Stake Analysis: <span id="analyseStake">Base $10</span></div><div>Current Strategy: <span id="analyseStrat">Fixed</span></div><div>Total Pips: <span id="analysePips">0 pips</span></div></div><div id="botAnalyseLog" style="font-size:9px;color:#6b7aa0;margin-top:6px;max-height:100px;overflow-y:auto;background:#070b14;padding:6px;border-radius:6px">Analyse will show here...</div></div><div class="botCard"><b>3. BULK TRADE - Multi Trade</b><div style="display:flex;gap:6px;margin-top:6px"><input id="bulkAmount" class="input" style="flex:1" value="10" type="number" placeholder="Stake per trade"><input id="bulkCountFull" class="input" style="flex:1" value="10" type="number" placeholder="Count"></div><div style="display:flex;gap:6px;margin-top:6px"><select id="bulkDir" class="input" style="flex:1"><option value="BUY">BUY All</option><option value="SELL">SELL All</option><option value="ALTERNATE">Alternate BUY/SELL</option><option value="RANDOM">Random</option></select><select id="bulkDelay" class="input" style="flex:1"><option value="1">1 sec delay</option><option value="3">3 sec delay</option><option value="5">5 sec delay</option></select></div><button class="btn" style="background:#fbbf24;color:#000;margin-top:6px" onclick="bulkTradeFull()">⚡ START BULK TRADE - <span id="bulkLabel">10 trades</span></button><button class="btn with" onclick="stopBot()">STOP BULK</button><div id="bulkProgress" style="height:6px;background:#111a33;border-radius:3px;margin-top:6px"><div id="bulkBar" style="height:100%;width:0%;background:#22c55e;border-radius:3px"></div></div></div></div>
+<div id="processingBar"><div><div id="procLeft">PROCESSING...</div><div id="procSub" style="font-size:10px">STAKE: $10</div></div><div id="procRight">0s</div></div>
+<div id="resultPopup" onclick="closePopup()"><div id="popupBox" class="popupBox profit"><div id="popupType">BUY</div><div id="popupAmount" style="font-size:36px;font-weight:900;color:#22c55e">+$9.00</div><div id="popupPips">+245 pips</div><div id="popupStatus" style="margin-top:10px;padding:10px;border-radius:8px;font-weight:900;background:#22c55e;color:#000">PROFIT</div><div id="popupBal" style="font-size:10px;color:#6b7aa0;margin-top:6px">BALANCE</div></div></div>
+<div class="bottomNav" id="bottomNav" style="display:none"><div onclick="showPage(1)">Binary</div><div onclick="showPage(4)">🤖 Bot</div><div onclick="showPage(2)">Wallet</div><div onclick="showPage(3)">History</div><div onclick="logout()">Logout</div></div>
+
+<script>
+// FIX FOR YOUR SCREENSHOT ERROR - localStorage is not defined
+var _memStore = {};
+function safeGet(k){ try{ if(typeof localStorage!=='undefined' && localStorage) return localStorage.getItem(k); }catch(e){} return _memStore[k]||null; }
+function safeSet(k,v){ try{ if(typeof localStorage!=='undefined' && localStorage){ localStorage.setItem(k,v); return; } }catch(e){} _memStore[k]=v; }
+function safeParse(k,def){ var v=safeGet(k); try{ return v?JSON.parse(v):def; }catch(e){ return def; } }
+
+var currentPhone=safeGet('currentPhone')||'';
+function getAllUsers(){var a=safeParse('ADM',[]);var b=safeParse('ADM_USERS',[]);return a.concat(b);}
+function getUser(ph){return getAllUsers().find(u=>u.phone==ph);}
+function getRealBal(ph){var u=getUser(ph);if(!u)return 0;var b=Number(u.bal);return isNaN(b)?0:b;}
+function saveUser(ph,bal,id){var list=safeParse('ADM',[]);var f=list.find(u=>u.phone==ph);if(f){f.bal=Number(bal)||0;if(id)f.id=id;}else{list.push({phone:ph,bal:Number(bal)||0,id:id||'USR'+Math.floor(Math.random()*9000+1000)});}safeSet('ADM',JSON.stringify(list));}
+function clearFix(){var l=safeParse('ADM',[]);l.forEach(u=>{if(isNaN(Number(u.bal)))u.bal=0;else u.bal=Number(u.bal);});safeSet('ADM',JSON.stringify(l));updateBalances();alert('Fixed');}
+var accounts={demo:Number(safeGet('demoBal')||10000),real:0},currentMode='demo',profitDemo=0,profitReal=0,price=1.0846,candles=[],activeTrades=[],nextIn=30,currentAsset='EUR/USD',tradeCount=0,wins=0,currentFilter='all';
+var assets={'EUR/USD':{p:1.0846,m:0.0003},'GBP/USD':{p:1.2720,m:0.00035},'USD/JPY':{p:154.32,m:0.02},'BTC/USD':{p:64250,m:8},'ETH/USD':{p:3120,m:1.2}};
+var canvas=document.getElementById('chart'),ctx=canvas.getContext('2d'),_started=false;
+var scrollOffset=0,visibleCount=30,maxCandles=200;
+function makeC(o,m){var cl=o+(Math.random()-0.5)*m*1.5;var hi=Math.max(o,cl)+Math.random()*m;var lo=Math.min(o,cl)-Math.random()*m;return{o:o,h:hi,l:lo,c:cl};}
+function forceLogin(){
+ var ph=document.getElementById('loginPhone').value.trim(); if(!ph){alert('Enter phone');return;}
+ currentPhone=ph; safeSet('currentPhone',ph);
+ var u=getUser(ph); if(!u){saveUser(ph,0,'USR'+Math.floor(Math.random()*9000+1000));} 
+ accounts.real=getRealBal(currentPhone);
+ document.getElementById('pageLogin').style.display='none';document.getElementById('p1').style.display='block';document.getElementById('bottomNav').style.display='flex';
+ var w=document.getElementById('wrap');if(w){canvas.width=w.clientWidth;canvas.height=340;}changeAsset();startAll();updateBalances();
+ var mp=document.getElementById('mpesaPhone'); if(mp) mp.value=ph;
+}
+function showPage(n){document.getElementById('p1').style.display=n==1?'block':'none';document.getElementById('p2').style.display=n==2?'block':'none';document.getElementById('p3').style.display=n==3?'block':'none';document.getElementById('pBot').style.display=n==4?'block':'none';if(n==1){setTimeout(function(){var w=document.getElementById('wrap');if(w)canvas.width=w.clientWidth;draw();},100);}if(n==2)updateBalances();}
+function logout(){document.getElementById('pageLogin').style.display='block';document.getElementById('p1').style.display='none';document.getElementById('p2').style.display='none';document.getElementById('p3').style.display='none';document.getElementById('pBot').style.display='none';document.getElementById('bottomNav').style.display='none';}
+function closePopup(){document.getElementById('resultPopup').style.display='none';}
+function setMode(m){currentMode=m;document.getElementById('demoBtn').className=m=='demo'?'active':'';document.getElementById('realBtn').className=m=='real'?'active':'';document.getElementById('modeLabel').innerText=m.toUpperCase();document.getElementById('walletMode').innerText=m.toUpperCase();document.getElementById('histMode').innerText=m.toUpperCase();var rb=document.getElementById('realBox');var db=document.getElementById('demoBox'); if(rb) rb.style.display=m=='real'?'block':'none'; if(db) db.style.display=m=='demo'?'block':'none';if(m=='real'&&currentPhone){accounts.real=getRealBal(currentPhone);}updateBalances();if(m=='real')showPage(2);}
+function updateBalances(){
+ if(currentPhone)accounts.real=getRealBal(currentPhone);
+ var bal=currentMode=='demo'?accounts.demo:accounts.real;
+ document.getElementById('balText').innerText='$'+bal.toFixed(2)+' '+currentMode.toUpperCase();
+ var usf=document.getElementById('usFlag'); if(usf) usf.style.display=currentMode=='real'?'inline-block':'none'; var depBtn=document.getElementById('depTopBtn'); if(depBtn) depBtn.style.display=currentMode=='real'?'inline-block':'none';
+ document.getElementById('bal2').innerText='$'+bal.toFixed(2);
+ document.getElementById('walletDesc').innerText=currentMode=='demo'?'DEMO $10k':'REAL'+currentPhone;
+ var ps=document.getElementById('phoneShow'); if(ps) ps.innerText=currentPhone?'Phone: '+currentPhone+' | ID: '+(getUser(currentPhone)?.id||''):'';
+ var ac=document.getElementById('accId'); if(ac) ac.innerText=getUser(currentPhone)?.id||'';
+ var pr=document.getElementById('profit'); if(pr) pr.innerText=(currentMode=='demo'?profitDemo:profitReal).toFixed(2)+' profit ('+currentMode.toUpperCase()+')';
+ safeSet('demoBal',accounts.demo);
+}
+function updateHistoryStats(){var p=currentMode=='demo'?profitDemo:profitReal;document.getElementById('statTrades').innerText=tradeCount;document.getElementById('statWinRate').innerText=tradeCount==0?'0%':Math.round(wins/tradeCount*100)+'%';document.getElementById('statProfit').innerText=(p>=0?'+':'')+p.toFixed(2);document.getElementById('statProfit').style.color=p>=0?'#22c55e':'#ef4444';}
+function filterHistory(type){currentFilter=type;document.getElementById('fAll').style.background=type=='all'?'#fbbf24':'#111a33';document.getElementById('fAll').style.color=type=='all'?'#000':'#fff';document.getElementById('fProfit').style.background=type=='profit'?'#22c55e':'#111a33';document.getElementById('fProfit').style.color=type=='profit'?'#000':'#fff';document.getElementById('fLoss').style.background=type=='loss'?'#ef4444':'#111a33';document.getElementById('fLoss').style.color=type=='loss'?'#fff':'#fff';var items=document.querySelectorAll('.histCard');items.forEach(function(el){if(type=='all')el.style.display='flex';else if(type=='profit')el.style.display=el.dataset.result=='profit'?'flex':'none';else el.style.display=el.dataset.result=='loss'?'flex':'none';});}
+function depositReal(){var phone=document.getElementById('mpesaPhone').value||currentPhone; var amt=parseFloat(document.getElementById('depAmount').value); if(!currentPhone){alert('Login first');return;} if(!amt||amt<100){alert('Min 100 KES');return;} var list=safeParse('pendingDeposits',[]); list.push({time:new Date().toLocaleString(),phone:currentPhone,amount:amt,status:'pending'}); safeSet('pendingDeposits',JSON.stringify(list)); alert('Deposit KES'+amt); document.getElementById('depAmount').value='';}
+function withdraw(){var amt=parseFloat(document.getElementById('withAmount').value); if(!currentPhone){alert('Login');return;} if(currentMode=='demo'){alert('Switch to REAL');return;} var bal=getRealBal(currentPhone); if(!amt||amt<10){alert('Min $10');return;} if(bal<amt){alert('Insufficient REAL $'+bal);return;} var list=safeParse('ADM',[]); var f=list.find(x=>x.phone==currentPhone); if(f){f.bal=Number(f.bal)-amt; safeSet('ADM',JSON.stringify(list));} var w=safeParse('pendingWithdraws',[]); w.push({time:new Date().toLocaleString(),user:currentPhone,amount:amt,status:'pending'}); safeSet('pendingWithdraws',JSON.stringify(w)); accounts.real=getRealBal(currentPhone); updateBalances(); alert('Withdraw $'+amt+' sent'); document.getElementById('withAmount').value='';}
+function resetDemo(){accounts.demo=10000;profitDemo=0;tradeCount=0;wins=0;document.getElementById('historyList').innerHTML='';safeSet('demoBal','10000');updateHistoryStats();setMode('demo');}
+function startAll(){
+ if(_started)return;_started=true;changeAsset();
+ setInterval(function(){
+   if(candles.length==0)return;
+   var last=candles[candles.length-1];
+   last.c+=(Math.random()-0.5)*assets[currentAsset].m*1.2;
+   if(last.c>last.h)last.h=last.c;
+   if(last.c<last.l)last.l=last.c;
+   price=last.c;
+   var txt=price.toFixed(5);
+   document.getElementById('priceTxt').innerText=txt;
+   document.getElementById('exRate').innerText=txt;
+   nextIn-=0.09;if(nextIn<0)nextIn=0;
+   document.getElementById('nextTxt').innerText='Next: '+nextIn.toFixed(1)+'s | '+(scrollOffset==0?'LIVE':'HIST');
+   draw();updateBar();
+ },90);
+ setInterval(function(){
+   if(candles.length==0)return;
+   var prev=candles[candles.length-1].c;
+   candles.push(makeC(prev,assets[currentAsset].m));
+   if(candles.length>maxCandles)candles.shift();
+   nextIn=30;
+   document.getElementById('strikeTxt').innerText=price.toFixed(5);
+ },15000);
+ setInterval(function(){var t=document.getElementById('rateTicker');if(!t)return;t.innerHTML='';for(var k in assets){assets[k].p+=(Math.random()-0.5)*assets[k].m*0.2;var d=document.createElement('div');d.className='rateItem';d.innerHTML='<b>'+k+'</b><br><span style="color:#22c55e">'+assets[k].p.toFixed(5)+'</span>';t.appendChild(d);}},800);
+ var startX=0;canvas.addEventListener('touchstart',function(e){startX=e.touches[0].clientX;});canvas.addEventListener('touchmove',function(e){var diff=e.touches[0].clientX-startX;if(Math.abs(diff)>25){if(diff>0)scrollOffset=Math.min(candles.length-visibleCount,scrollOffset+1);else scrollOffset=Math.max(0,scrollOffset-1);startX=e.touches[0].clientX;draw();}});canvas.addEventListener('mousedown',function(e){startX=e.clientX;});canvas.addEventListener('mousemove',function(e){if(e.buttons==1){var diff=e.clientX-startX;if(Math.abs(diff)>25){if(diff>0)scrollOffset=Math.min(candles.length-visibleCount,scrollOffset+1);else scrollOffset=Math.max(0,scrollOffset-1);startX=e.clientX;draw();}}});}
+function changeAsset(){var sel=document.getElementById('assetSel');if(sel)currentAsset=sel.value;price=assets[currentAsset].p;var at=document.getElementById('assetTitle');if(at)at.innerText=currentAsset+' BINARY 90%';candles=[];scrollOffset=0;for(var i=0;i<60;i++){var last=candles.length?candles[candles.length-1].c:price;candles.push(makeC(last,assets[currentAsset].m));}draw();}
+function getSMA(p,e){if(e-p+1<0)return null;var s=0;for(var i=e-p+1;i<=e;i++)s+=candles[i].c;return s/p;}
+function draw(){if(!ctx||candles.length<2)return;var W=canvas.width,H=canvas.height;if(W==0){W=360;canvas.width=360;}var end=candles.length-scrollOffset;var start=Math.max(0,end-visibleCount);var vis=candles.slice(start,end);if(vis.length<2)return;var min=9999999,max=0;for(var i=0;i<vis.length;i++){if(vis[i].l<min)min=vis[i].l;if(vis[i].h>max)max=vis[i].h;}var range=max-min;if(range<0.0006)range=0.0006;ctx.clearRect(0,0,W,H);ctx.fillStyle='#0a1020';ctx.fillRect(0,0,W,H);ctx.strokeStyle='#1c2540';ctx.lineWidth=1;for(var g=0;g<4;g++){var yy=g*H/4;ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(W,yy);ctx.stroke();}var w=W/vis.length*0.6;for(var i=0;i<vis.length;i++){var cc=vis[i];var x=i/vis.length*W+10;var yO=H-((cc.o-min)/range*(H-40)+20);var yC=H-((cc.c-min)/range*(H-40)+20);var yH=H-((cc.h-min)/range*(H-40)+20);var yL=H-((cc.l-min)/range*(H-40)+20);var green=cc.c>=cc.o;ctx.fillStyle=green?'#22c55e':'#ef4444';ctx.strokeStyle=green?'#22c55e':'#ef4444';ctx.beginPath();ctx.moveTo(x,yH);ctx.lineTo(x,yL);ctx.stroke();ctx.fillRect(x-w/2,Math.min(yO,yC),w,Math.max(3,Math.abs(yO-yC)));}ctx.lineWidth=2;ctx.strokeStyle='#fbbf24';ctx.beginPath();for(var i=0;i<vis.length;i++){var idx=start+i;var sma=getSMA(10,idx);if(sma==null)continue;var y=H-((sma-min)/range*(H-40)+20);var x=i/vis.length*W+10;if(i==0||getSMA(10,idx-1)==null)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();ctx.strokeStyle='#60a5fa';ctx.beginPath();for(var i=0;i<vis.length;i++){var idx=start+i;var sma=getSMA(20,idx);if(sma==null)continue;var y=H-((sma-min)/range*(H-40)+20);var x=i/vis.length*W+10;if(i==0||getSMA(20,idx-1)==null)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();var yPrice=H-((price-min)/range*(H-40)+20);ctx.strokeStyle=price>=vis[vis.length-1].o?'#22c55e':'#ef4444';ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(0,yPrice);ctx.lineTo(W,yPrice);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#6b7aa0';ctx.font='10px system-ui';ctx.fillText((scrollOffset==0?'LIVE':'HISTORY -'+scrollOffset)+' | '+vis.length+' candles',10,H-5);}
+function updateBar(){var bar=document.getElementById('processingBar');if(activeTrades.length==0){bar.style.display='none';return;}var at=activeTrades[activeTrades.length-1];if(at.done){bar.style.display='none';return;}var pips=(price-at.entry)/0.00001*12.5;if(at.type=='SELL')pips=-pips;var secs=Math.ceil((at.end-Date.now())/1000);if(secs<0)secs=0;bar.style.display='flex';document.getElementById('procSub').innerText='STAKE: $'+at.stake+' | '+at.asset+' | '+secs+'s | '+pips.toFixed(1)+' pips';bar.className=pips>=0?'green':'red';document.getElementById('procLeft').innerText='PROCESSING '+at.type+' '+at.mode.toUpperCase();document.getElementById('procRight').innerText=pips.toFixed(1)+' pips';}
+function doTrade(type){
+ var stake=parseFloat(document.getElementById('stake').value)||10;
+ if(currentMode=='demo'){if(accounts.demo<stake){alert('Insufficient DEMO');return;}} else {if(!currentPhone){alert('Login first');return;} accounts.real=getRealBal(currentPhone); if(accounts.real<stake){alert('Insufficient REAL $'+accounts.real.toFixed(2));return;}}
+ var durEl=document.getElementById('dur'); var dur=parseInt(durEl.value)||30;
+ if(currentMode=='demo')accounts.demo-=stake; else { var list=safeParse('ADM',[]); var f=list.find(x=>x.phone==currentPhone); if(f){f.bal=Number(f.bal)-stake; safeSet('ADM',JSON.stringify(list));} accounts.real=getRealBal(currentPhone);}
+ updateBalances();
+ var tr={type:type,stake:stake,entry:price,end:Date.now()+dur*1000,done:false,processing:true,durLabel:durEl.value+'s',asset:currentAsset,mode:currentMode};
+ activeTrades.push(tr); updateBar();
+ setTimeout(function(){
+   var pips=(price-tr.entry)/0.00001*12.5; if(type=='SELL')pips=-pips;
+   var ctrls=safeParse('ADM_CTRLS',{}); var ctrl=ctrls[currentPhone]||'random'; var finalWin;
+   if(currentMode=='real' && ctrl!='random'){ finalWin = ctrl=='win'; } else { finalWin = pips>0 || Math.random()<0.55; }
+   var payout=finalWin?stake*1.9:0;
+   if(finalWin){ if(tr.mode=='demo'){accounts.demo+=payout;} else { var list2=safeParse('ADM',[]); var f2=list2.find(x=>x.phone==currentPhone); if(f2){f2.bal=Number(f2.bal)+payout; safeSet('ADM',JSON.stringify(list2));} accounts.real=getRealBal(currentPhone);} }
+   if(tr.mode=='demo')profitDemo+=finalWin?stake*0.9:-stake; else profitReal+=finalWin?stake*0.9:-stake;
+   if(currentMode=='real' && ctrl!='random'){ delete ctrls[currentPhone]; safeSet('ADM_CTRLS',JSON.stringify(ctrls)); }
+   tr.done=true; updateBalances(); tradeCount++; if(finalWin)wins++;
+   var hl=document.getElementById('historyList'); var div=document.createElement('div'); div.className='histCard'; div.dataset.result=finalWin?'profit':'loss';
+   var time=new Date().toLocaleTimeString(); var profitVal=finalWin?stake*0.9:-stake;
+   div.style.cssText='display:flex;background:#0d1224;border:1px solid #1c2540;border-left:4px solid '+(finalWin?'#22c55e':'#ef4444')+';border-radius:12px;padding:12px;align-items:center;justify-content:space-between;';
+   div.innerHTML='<div><div style="display:flex;gap:6px;align-items:center"><span style="background:'+(type=='BUY'?'#22c55e':'#ef4444')+';color:#000;padding:2px 6px;border-radius:6px;font-size:9px;font-weight:900">'+type+'</span><b style="font-size:12px">'+tr.asset+'</b><span style="font-size:9px;color:#6b7aa0">'+time+'</span><span style="font-size:8px;background:#111a33;padding:2px 5px;border-radius:4px">'+tr.mode.toUpperCase()+'</span></div><div style="font-size:10px;color:#6b7aa0;margin-top:4px">Stake $'+stake.toFixed(2)+' Payout $'+(finalWin? (stake*1.9).toFixed(2):'0.00')+' | '+pips.toFixed(1)+' pips</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:900;color:'+(finalWin?'#22c55e':'#ef4444')+'">'+(finalWin?'+$':'-$')+Math.abs(profitVal).toFixed(2)+'</div><div style="font-size:9px;background:'+(finalWin?'#22c55e':'#ef4444')+';color:'+(finalWin?'#000':'#fff')+';padding:2px 6px;border-radius:10px;font-weight:800;margin-top:2px;text-align:center">'+(finalWin?'PROFIT':'LOSS')+'</div></div>';
+   hl.prepend(div); var profEl=document.getElementById('profit'); if(profEl) profEl.style.display='none'; updateHistoryStats();
+   var popup=document.getElementById('resultPopup'); document.getElementById('popupType').innerText=type+' '+tr.asset+' $'+stake; document.getElementById('popupAmount').innerText=(finalWin?'+$':'-$')+Math.abs(finalWin?stake*0.9:stake).toFixed(2); document.getElementById('popupAmount').style.color=finalWin?'#22c55e':'#ef4444'; document.getElementById('popupPips').innerText=pips.toFixed(1)+' pips '+price.toFixed(5); document.getElementById('popupStatus').innerText=finalWin?'PROFIT':'LOSS'; document.getElementById('popupStatus').style.background=finalWin?'#22c55e':'#ef4444'; document.getElementById('popupBal').innerText=tr.mode.toUpperCase()+' BAL $'+(tr.mode=='demo'?accounts.demo:accounts.real).toFixed(2); document.getElementById('popupBox').className='popupBox '+(finalWin?'profit':'loss'); popup.style.display='flex'; setTimeout(function(){popup.style.display='none';},3000);
+ },dur*1000);
+}
+
+// DBOT LOGIC
+var botRunning=false,botStats={profit:0,trades:0,wins:0,loss:0,baseStake:10,totalPips:0};
+function startBot(){
+  var strat=document.getElementById('botStrat').value || document.getElementById('mmSel').value || 'fixed';
+  var dir=document.getElementById('botDir').value || 'BUY';
+  var bulk=parseInt(document.getElementById('bulkCount').value)||5;
+  var logic=document.getElementById('logicSel')?document.getElementById('logicSel').value:'manual';
+  botRunning=true; botStats.baseStake=parseFloat(document.getElementById('stake').value)||10;
+  var currentStake=botStats.baseStake; var i=0;
+  var log=document.getElementById('botLog'); var analyseLog=document.getElementById('botAnalyseLog');
+  if(log) log.innerText='Bot started: '+strat+' | '+logic+' x'+bulk+'\n';
+  if(analyseLog) analyseLog.innerText='Analyse started...\n';
+  var aStrat=document.getElementById('analyseStrat'); if(aStrat) aStrat.innerText=strat+' / '+logic;
+  function runOne(){
+    if(!botRunning||i>=bulk){ if(log) log.innerText+='\nFinished'; botRunning=false; return; }
+    var type=dir; if(dir=='ALTERNATE') type=i%2==0?'BUY':'SELL'; if(dir=='RANDOM') type=Math.random()>0.5?'BUY':'SELL';
+    if(logic=='ma'){ var sma10=getSMA(10,candles.length-1); var sma20=getSMA(20,candles.length-1); if(sma10&&sma20) type=sma10>sma20?'BUY':'SELL'; }
+    var bStake=document.getElementById('bStake'); if(bStake) bStake.innerText=currentStake; var bAsset=document.getElementById('bAsset'); if(bAsset) bAsset.innerText=currentAsset;
+    if(log) log.innerText+='\n#'+(i+1)+' '+type+' $'+currentStake.toFixed(2)+'...';
+    doTrade(type);
+    setTimeout(()=>{
+      var win=Math.random()>0.45; if(win){ botStats.wins++; } else { botStats.loss++; }
+      botStats.trades++; botStats.profit+=(win?currentStake*0.9:-currentStake); botStats.totalPips+=win?15:-15;
+      var bp=document.getElementById('botProfit'); if(bp) bp.innerText='$'+botStats.profit.toFixed(2);
+      var bt=document.getElementById('botTrades'); if(bt) bt.innerText=botStats.trades;
+      var bw=document.getElementById('botWin'); if(bw) bw.innerText=botStats.trades?Math.round(botStats.wins/botStats.trades*100)+'%':'0%';
+      var bl=document.getElementById('botLoss'); if(bl) bl.innerText='LOSS '+botStats.loss;
+      var aStake=document.getElementById('analyseStake'); if(aStake) aStake.innerText='Base $'+botStats.baseStake+' | Current $'+currentStake.toFixed(2);
+      var aPips=document.getElementById('analysePips'); if(aPips) aPips.innerText=botStats.totalPips.toFixed(1)+' pips';
+      if(analyseLog) analyseLog.innerText+='\nTrade '+(i+1)+': '+type+' '+(win?'WIN':'LOSS');
+      if(strat=='martingale'){ if(!win) currentStake*=2; else currentStake=botStats.baseStake; }
+      if(strat=='reverse'){ if(win) currentStake*=2; else currentStake=botStats.baseStake; }
+      if(strat=='dalembert'){ if(!win) currentStake+=1; else currentStake=Math.max(botStats.baseStake,currentStake-1); }
+      var sl=parseFloat(document.getElementById('stopLoss').value)||50; var tp=parseFloat(document.getElementById('takeProfit').value)||100;
+      if(botStats.profit<=-sl){ if(log) log.innerText+='\nSTOP LOSS HIT'; botRunning=false; return; }
+      if(botStats.profit>=tp){ if(log) log.innerText+='\nTAKE PROFIT HIT'; botRunning=false; return; }
+      i++; setTimeout(runOne,3500);
+    },3200);
+  }
+  runOne();
+}
+function stopBot(){botRunning=false; var log=document.getElementById('botLog'); if(log) log.innerText+='\nStopped';}
+function bulkTrade(){ var count=parseInt(document.getElementById('bulkCount').value)||5; var dirEl=document.getElementById('botDir'); var type=dirEl&&dirEl.value=='SELL'?'SELL':'BUY'; for(let k=0;k<count;k++){ setTimeout(()=>doTrade(type), k*3500); } }
+function bulkTradeFull(){
+  var count=parseInt(document.getElementById('bulkCountFull').value)||10; var amt=parseFloat(document.getElementById('bulkAmount').value)||10; var dir=document.getElementById('bulkDir').value; var delay=parseInt(document.getElementById('bulkDelay').value)||3;
+  var stakeEl=document.getElementById('stake'); if(stakeEl) stakeEl.value=amt;
+  var bl=document.getElementById('bulkLabel'); if(bl) bl.innerText=count+' trades';
+  botRunning=true; var i=0;
+  function runBulk(){
+    if(!botRunning||i>=count){botRunning=false;return;}
+    var type=dir; if(dir=='ALTERNATE') type=i%2==0?'BUY':'SELL'; if(dir=='RANDOM') type=Math.random()>0.5?'BUY':'SELL';
+    doTrade(type); i++;
+    var bar=document.getElementById('bulkBar'); if(bar) bar.style.width=(i/count*100)+'%';
+    setTimeout(runBulk,delay*1000);
+  }
+  runBulk();
+}
+setMode('demo');
+window.onload=function(){var w=document.getElementById('wrap');if(w)canvas.width=w.clientWidth||360;changeAsset();startAll(); if(currentPhone){var lp=document.getElementById('loginPhone'); if(lp) lp.value=currentPhone; accounts.real=getRealBal(currentPhone);}};
+setInterval(function(){if(currentPhone){accounts.real=getRealBal(currentPhone); if(currentMode=='real')updateBalances();}},2000);
+</script></body></html>
