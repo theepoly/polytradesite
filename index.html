@@ -262,4 +262,76 @@ function bulkTradeFull(){
 setMode('demo');
 window.onload=function(){var w=document.getElementById('wrap');if(w)canvas.width=w.clientWidth||360;changeAsset();startAll(); if(currentPhone){var lp=document.getElementById('loginPhone'); if(lp) lp.value=currentPhone; accounts.real=getRealBal(currentPhone);}};
 setInterval(function(){if(currentPhone){accounts.real=getRealBal(currentPhone); if(currentMode=='real')updateBalances();}},2000);
+</script><script>
+// ===== DERIV REAL TRADING - PART 2 =====
+let derivWS2;
+let APP_ID = 1089;
+let myToken = localStorage.getItem('derivToken') || '';
+let activeContractId = null;
+
+function startDerivReal(){
+  derivWS2 = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id='+APP_ID);
+  derivWS2.onopen = ()=>{
+    let s = document.getElementById('derivStatus');
+    if(s) s.innerText = '🟢 Deriv Connected - Live';
+    if(myToken) derivWS2.send(JSON.stringify({authorize: myToken}));
+    derivWS2.send(JSON.stringify({ticks:'R_75'}));
+  };
+  derivWS2.onmessage = (e)=>{
+    let d = JSON.parse(e.data);
+    if(d.msg_type === 'tick'){
+      let el = document.getElementById('livePrice');
+      if(el) el.innerText = d.tick.symbol + ': $' + d.tick.quote;
+    }
+    if(d.msg_type === 'authorize'){
+      if(d.error){ alert('Token wrong! Get new token'); return; }
+      let bal = d.authorize.balance;
+      let curr = d.authorize.currency;
+      document.getElementById('derivStatus').innerText = '✅ Logged in: ' + d.authorize.loginid + ' | Balance: ' + curr + ' ' + bal;
+      document.getElementById('bal').innerText = curr + ' ' + bal;
+      derivWS2.send(JSON.stringify({portfolio:1}));
+    }
+    if(d.msg_type === 'proposal'){
+      let proposalId = d.proposal.id;
+      let price = d.proposal.ask_price;
+      if(confirm('Trade cost: $'+price+' - Confirm BUY?')){
+        derivWS2.send(JSON.stringify({buy: proposalId, price: price}));
+      }
+    }
+    if(d.msg_type === 'buy'){
+      activeContractId = d.buy.contract_id;
+      alert('✅ TRADE PLACED! Contract ID: ' + activeContractId);
+      document.getElementById('tradeStatus').innerText = '🔥 TRADE LIVE! ID: ' + activeContractId;
+    }
+    if(d.msg_type === 'portfolio'){
+      let trades = d.portfolio.contracts;
+      let html = 'Open Trades: ' + trades.length + '<br>';
+      trades.forEach(t=>{ html += t.symbol + ' - Profit: $' + t.profit + '<br>'; });
+      document.getElementById('openTrades').innerHTML = html;
+    }
+    if(d.msg_type === 'sell'){
+      alert('✅ Trade Closed! Sold for: $' + d.sell.sold_for);
+    }
+  };
+}
+function loginDeriv(){
+  let token = prompt('Paste your Deriv API Token:');
+  if(!token) return;
+  localStorage.setItem('derivToken', token);
+  myToken = token;
+  derivWS2.send(JSON.stringify({authorize: token}));
+}
+function placeRealTrade(type){
+  let stake = document.getElementById('tradeStake').value || 1;
+  let symbol = document.getElementById('tradeSymbol').value || 'R_75';
+  let duration = document.getElementById('tradeDuration').value || 5;
+  if(!myToken){ alert('Connect Deriv first!'); loginDeriv(); return; }
+  derivWS2.send(JSON.stringify({proposal:1, amount:parseFloat(stake), basis:'stake', contract_type:type, currency:'USD', duration:parseInt(duration), duration_unit:'t', symbol:symbol}));
+  document.getElementById('tradeStatus').innerText = '⏳ Getting price from Deriv...';
+}
+function closeTrade(){
+  if(!activeContractId){ alert('No open trade'); return; }
+  derivWS2.send(JSON.stringify({sell: activeContractId, price: 0}));
+}
+startDerivReal();
 </script></body></html>
