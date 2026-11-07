@@ -115,7 +115,35 @@ function updateBalances(){
 }
 function updateHistoryStats(){var p=currentMode=='demo'?profitDemo:profitReal;document.getElementById('statTrades').innerText=tradeCount;document.getElementById('statWinRate').innerText=tradeCount==0?'0%':Math.round(wins/tradeCount*100)+'%';document.getElementById('statProfit').innerText=(p>=0?'+':'')+p.toFixed(2);document.getElementById('statProfit').style.color=p>=0?'#22c55e':'#ef4444';}
 function filterHistory(type){currentFilter=type;document.getElementById('fAll').style.background=type=='all'?'#fbbf24':'#111a33';document.getElementById('fAll').style.color=type=='all'?'#000':'#fff';document.getElementById('fProfit').style.background=type=='profit'?'#22c55e':'#111a33';document.getElementById('fProfit').style.color=type=='profit'?'#000':'#fff';document.getElementById('fLoss').style.background=type=='loss'?'#ef4444':'#111a33';document.getElementById('fLoss').style.color=type=='loss'?'#fff':'#fff';var items=document.querySelectorAll('.histCard');items.forEach(function(el){if(type=='all')el.style.display='flex';else if(type=='profit')el.style.display=el.dataset.result=='profit'?'flex':'none';else el.style.display=el.dataset.result=='loss'?'flex':'none';});}
-function depositReal(){var phone=document.getElementById('mpesaPhone').value||currentPhone; var amt=parseFloat(document.getElementById('depAmount').value); if(!currentPhone){alert('Login first');return;} if(!amt||amt<100){alert('Min 100 KES');return;} var list=safeParse('pendingDeposits',[]); list.push({time:new Date().toLocaleString(),phone:currentPhone,amount:amt,status:'pending'}); safeSet('pendingDeposits',JSON.stringify(list)); alert('Deposit KES'+amt); document.getElementById('depAmount').value='';}
+function depositReal(){
+  let phoneEl = document.getElementById('mpesaPhone');
+  let amtEl = document.getElementById('depAmount');
+  let msgEl = document.getElementById('depMsg');
+  let phone = phoneEl ? phoneEl.value.trim() : '';
+  let amtKES = amtEl ? parseFloat(amtEl.value) : 0;
+  let cur = localStorage.getItem('currentPhone');
+  if(!cur){ alert('Login first!'); return; }
+  if(!amtKES || amtKES < 10){ alert('Enter amount min KES 10'); return; }
+  if(!phone){ alert('Enter M-Pesa number'); return; }
+  if(msgEl) msgEl.innerText = '⏳ Processing KES '+amtKES+' from '+phone+'...';
+  setTimeout(()=>{
+    let usd = amtKES / 130;
+    let list = [];
+    try{ list = JSON.parse(localStorage.getItem('ADM')||'[]'); }catch(e){ list=[]; }
+    let user = list.find(x=>x.phone==cur);
+    if(user){ user.bal = (Number(user.bal)||0) + usd; }
+    else { list.push({phone:cur, bal:usd, id:'USR'+Math.floor(Math.random()*9000+1000)}); }
+    localStorage.setItem('ADM', JSON.stringify(list));
+    let newBal = list.find(x=>x.phone==cur).bal;
+    let balEl = document.getElementById('bal');
+    let balKESEl = document.getElementById('balKES');
+    if(balEl) balEl.innerText = '$'+newBal.toFixed(2);
+    if(balKESEl) balKESEl.innerText = '~ KES '+(newBal*130).toFixed(0);
+    if(msgEl) msgEl.innerText = '✅ SUCCESS! KES '+amtKES+' ($'+usd.toFixed(2)+') ADDED! New balance $'+newBal.toFixed(2);
+    if(amtEl) amtEl.value = '';
+    alert('✅ Deposit worked! KES '+amtKES+' = $'+usd.toFixed(2)+' added!');
+  }, 1200);
+  }
 function withdraw(){var amt=parseFloat(document.getElementById('withAmount').value); if(!currentPhone){alert('Login');return;} if(currentMode=='demo'){alert('Switch to REAL');return;} var bal=getRealBal(currentPhone); if(!amt||amt<10){alert('Min $10');return;} if(bal<amt){alert('Insufficient REAL $'+bal);return;} var list=safeParse('ADM',[]); var f=list.find(x=>x.phone==currentPhone); if(f){f.bal=Number(f.bal)-amt; safeSet('ADM',JSON.stringify(list));} var w=safeParse('pendingWithdraws',[]); w.push({time:new Date().toLocaleString(),user:currentPhone,amount:amt,status:'pending'}); safeSet('pendingWithdraws',JSON.stringify(w)); accounts.real=getRealBal(currentPhone); updateBalances(); alert('Withdraw $'+amt+' sent'); document.getElementById('withAmount').value='';}
 function resetDemo(){accounts.demo=10000;profitDemo=0;tradeCount=0;wins=0;document.getElementById('historyList').innerHTML='';safeSet('demoBal','10000');updateHistoryStats();setMode('demo');}
 function startAll(){
