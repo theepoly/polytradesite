@@ -30,7 +30,6 @@ body{margin:0;background:#070b14;color:#fff;font-family:system-ui;padding-bottom
 </div>
 
 <script>
-const APP_ID = 68853;
 let dToken = localStorage.getItem('deriv_token') || new URLSearchParams(location.search).get('token1') || new URLSearchParams(location.search).get('token');
 if(dToken){ localStorage.setItem('deriv_token', dToken); history.replaceState({}, '', location.pathname); }
 function loginDerivAuto(){
