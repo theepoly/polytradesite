@@ -1,46 +1,4 @@
-<!DOCTYPE html><html><head><!-- DERIV CONNECT - NETLIFY ONLY -->
-<button id="derivBtn" style="background:#ff444f; color:white; padding:15px 25px; border:none; border-radius:12px; font-weight:bold; cursor:pointer; width:100%;">
-  Connect to Deriv
-</button>
-<p id="derivStatus">Not Connected</p>
-<p id="derivBalance" style="font-weight:bold;"></p>
-
-<script>
-  const APP_ID = "34RKUC2z7LVTihxn3Pt9z";
-  const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
-
-  ws.onopen = () => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token1');
-    if (token) {
-      localStorage.setItem('deriv_token', token);
-      // Clean URL after login so token doesn't stay in link
-      window.history.replaceState({}, "", "https://polytradesite.netlify.app/");
-      ws.send(JSON.stringify({ authorize: token }));
-    } else {
-      const saved = localStorage.getItem('deriv_token');
-      if (saved) ws.send(JSON.stringify({ authorize: saved }));
-    }
-  };
-
-  ws.onmessage = (msg) => {
-    const data = JSON.parse(msg.data);
-    if (data.authorize) {
-      document.getElementById('derivStatus').innerText = "✅ Connected: " + data.authorize.loginid;
-      ws.send(JSON.stringify({ balance: 1 }));
-    }
-    if (data.balance) {
-      document.getElementById('derivBalance').innerText = "Balance: $" + data.balance.balance;
-    }
-    if (data.error) {
-      document.getElementById('derivStatus').innerText = "❌ " + data.error.message;
-    }
-  };
-
-  document.getElementById('derivBtn').onclick = () => {
-    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&l=en&brand=deriv`;
-  };
-</script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PolyTrading DBot - Final</title><style>
+<!DOCTYPE html><html><head></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PolyTrading DBot - Final</title><style>
 body{margin:0;background:#070b14;color:#fff;font-family:system-ui;padding-bottom:80px}
 .top{background:#0d1224;padding:10px;display:flex;border-bottom:1px solid #1c2540;position:sticky;top:0;z-index:10;align-items:center}
 .bal{margin-left:auto;background:#111a33;padding:6px 10px;border-radius:20px;color:#22c55e;font-size:11px;border:1px solid #243358;font-weight:900;display:flex;align-items:center;gap:4px}
